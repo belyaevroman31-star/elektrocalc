@@ -196,6 +196,37 @@ input:focus{outline:none;border-color:var(--am)}
 /* pages */
 .pg{display:none}.pg.a{display:block}
 
+/* history */
+.hitem{
+  background:var(--panel);border:1px solid var(--bdr);border-radius:12px;
+  padding:14px;margin-bottom:10px;cursor:pointer;transition:all .2s;
+}
+.hitem:active{border-color:var(--am);transform:scale(.98)}
+.hitem-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.hitem-name{font-weight:700;font-size:14px}
+.hitem-date{font-size:11px;color:var(--mut)}
+.hitem-addr{font-size:12px;color:var(--mut);margin-bottom:4px}
+.hitem-total{font-size:18px;font-weight:800;color:var(--amb);text-align:right}
+.hitem-items{font-size:11px;color:var(--cop);margin-top:4px}
+.hempty{text-align:center;padding:40px 20px;color:var(--mut);font-size:14px}
+.hacts{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.hdetail{padding:0}
+.hdetail .hrow{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--bdr2);font-size:13px}
+.hdetail .hrow:last-child{border-bottom:none}
+.hdetail .hrow .hn{flex:1;padding-right:8px}
+.hdetail .hrow .hq{color:var(--mut);margin-right:8px;font-family:monospace}
+.hdetail .hrow .ht{color:var(--amb);font-weight:600;white-space:nowrap}
+.hback{
+  background:none;border:none;color:var(--am);font-size:14px;font-weight:700;
+  cursor:pointer;margin-bottom:14px;display:flex;align-items:center;gap:6px;
+  padding:0;
+}
+.hdel{
+  background:rgba(226,87,76,.12);border:1px solid rgba(226,87,76,.3);
+  color:var(--dng);padding:6px 12px;border-radius:8px;font-size:12px;
+  font-weight:600;cursor:pointer;
+}
+
 /* search */
 .sw{margin-bottom:14px;position:relative}
 .sw input{
@@ -283,6 +314,16 @@ input:focus{outline:none;border-color:var(--am)}
     </div>
     <ul class="cl" id="cL"></ul>
   </div>
+
+  <div class="pg" id="pHist">
+    <header><p class="eye">Архив</p><h1>История расчётов</h1></header>
+    <div id="hList"></div>
+  </div>
+
+  <div class="pg" id="pDetail">
+    <header><p class="eye">Детали</p><h1 id="dTitle">Расчёт</h1></header>
+    <div id="dContent"></div>
+  </div>
 </div>
 
 <div class="install-banner" id="iBan"><p>Установить приложение на экран?</p><div class="row"><button class="inst" onclick="instApp()">Установить</button><button class="inst2" onclick="disInst()">Позже</button></div></div>
@@ -291,6 +332,7 @@ input:focus{outline:none;border-color:var(--am)}
 <nav class="bnav">
   <button class="nbtn a" onclick="sP('pCalc',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h8M8 14h4"/></svg>Калькулятор</button>
   <button class="nbtn" onclick="sP('pCat',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Разделы</button>
+  <button class="nbtn" onclick="sP('pHist',this);bH()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>История</button>
   <button class="nbtn" onclick="ePDF()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M12 18v-6M9 15l3 3 3-3"/></svg>PDF</button>
 </nav>
 
@@ -436,7 +478,7 @@ function ePDF(){
   S.forEach((cat,ci)=>cat.d.forEach((it,ii)=>{const q=parseFloat(document.getElementById('q_'+ci+'_'+ii).value)||0;if(q>0){const pr=isC?it.b:it.p;const t=q*pr;gt+=t;rows.push([it.n,it.u,pr,q,t])}}));
   if(!rows.length){doc.text('Нет позиций',14,y)}
   else{doc.autoTable({startY:y,head:[['Наименование','Ед.','Цена','Кол-во','Сумма']],body:rows,styles:{fontSize:8},headStyles:{fillColor:[22,25,32]},columnStyles:{0:{cellWidth:75},2:{halign:'right'},3:{halign:'center'},4:{halign:'right'}}});doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('ИТОГО: '+gt.toLocaleString('ru-RU')+' ₽',14,doc.lastAutoTable.finalY+8)}
-  doc.save(gFN()+'.pdf');ts('PDF сохранён')}
+  doc.save(gFN()+'.pdf');saveCalc();ts('PDF сохранён')}
 
 function eXLS(){
   const s=';';let csv='\uFEFF';
@@ -447,7 +489,64 @@ function eXLS(){
   let gt=0;
   S.forEach((cat,ci)=>{let cr=[];cat.d.forEach((it,ii)=>{const q=parseFloat(document.getElementById('q_'+ci+'_'+ii).value)||0;if(q>0){const pr=isC?it.b:it.p;const t=q*pr;gt+=t;cr.push(it.n+s+it.u+s+pr+s+q+s+t)}});if(cr.length)csv+='\n'+cat.c+'\n'+cr.join('\n')+'\n'});
   csv+='\n'+s+s+s+'ИТОГО:'+s+gt+'\n';
-  const b=new Blob([csv],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=gFN()+'.csv';a.click();URL.revokeObjectURL(a.href);ts('Excel сохранён')}
+  const b=new Blob([csv],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=gFN()+'.csv';  a.click();URL.revokeObjectURL(a.href);saveCalc();ts('Excel сохранён')}
+
+// History
+function getHist(){try{return JSON.parse(localStorage.getItem('ecalc_hist')||'[]')}catch(e){return[]}}
+function saveHist(h){try{localStorage.setItem('ecalc_hist',JSON.stringify(h))}catch(e){}}
+function saveCalc(){
+  const cn=(document.getElementById('cN').value||'').trim();
+  const cp=(document.getElementById('cP').value||'').trim();
+  const ca=(document.getElementById('cA').value||'').trim();
+  const items=[];let gt=0;
+  S.forEach((cat,ci)=>cat.d.forEach((it,ii)=>{
+    const q=parseFloat(document.getElementById('q_'+ci+'_'+ii).value)||0;
+    if(q>0){const pr=isC?it.b:it.p;const t=q*pr;gt+=t;items.push({cat:cat.c,name:it.n,unit:it.u,price:pr,qty:q,sum:t})}
+  }));
+  if(!items.length)return null;
+  const calc={id:Date.now(),date:new Date().toLocaleDateString('ru-RU'),time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),name:cn||'Без имени',phone:cp,address:ca,concrete:isC,items:items,total:gt};
+  const h=getHist();h.unshift(calc);saveHist(h);return calc;
+}
+function bH(){
+  const h=getHist();const el=document.getElementById('hList');
+  if(!h.length){el.innerHTML='<div class="hempty">Нет сохранённых расчётов.<br>Сделайте расчёт и скачайте PDF или Excel — он сохранится автоматически.</div>';return}
+  let html=`<div class="hacts"><button class="btn bs" onclick="eAllJSON()">Выгрузить все расчёты (JSON)</button></div>`;
+  h.forEach(c=>{
+    const cnt=c.items.length;
+    html+=`<div class="hitem" onclick="vDetail(${c.id})">
+      <div class="hitem-top"><span class="hitem-name">${c.name}</span><span class="hitem-date">${c.date} ${c.time}</span></div>
+      ${c.address?'<div class="hitem-addr">'+c.address+'</div>':''}
+      <div class="hitem-total">${fm(c.total)}</div>
+      <div class="hitem-items">${cnt} ${cnt===1?'позиция':cnt<5?'позиции':'позиций'} · ${c.concrete?'Бетон':'Стандарт'}</div>
+    </div>`;
+  });
+  el.innerHTML=html;
+}
+function vDetail(id){
+  const h=getHist();const c=h.find(x=>x.id===id);if(!c)return;
+  document.getElementById('dTitle').textContent=c.name;
+  let html=`<button class="hback" onclick="sP('pHist',document.querySelectorAll('.nbtn')[2]);bH()">← Назад</button>
+    <div class="pnl" style="margin-bottom:12px">
+      <div style="font-size:13px;margin-bottom:4px"><b>Дата:</b> ${c.date} ${c.time}</div>
+      ${c.phone?'<div style="font-size:13px;margin-bottom:4px"><b>Тел:</b> '+c.phone+'</div>':''}
+      ${c.address?'<div style="font-size:13px;margin-bottom:4px"><b>Адрес:</b> '+c.address+'</div>':''}
+      <div style="font-size:13px"><b>Режим:</b> ${c.concrete?'Бетон ×2':'Стандарт'}</div>
+    </div>
+    <div class="pnl hdetail">`;
+  c.items.forEach(it=>{html+=`<div class="hrow"><span class="hn">${it.name}</span><span class="hq">${it.qty} × ${it.price}</span><span class="ht">${fm(it.sum)}</span></div>`});
+  html+=`</div><div class="gtot"><h2>ИТОГО</h2><div class="a">${fm(c.total)}</div></div>
+    <button class="hdel" onclick="dCalc(${c.id})" style="margin-top:12px;width:100%">Удалить расчёт</button>`;
+  document.getElementById('dContent').innerHTML=html;
+  sP('pDetail',null);
+}
+function dCalc(id){if(!confirm('Удалить расчёт?'))return;const h=getHist().filter(x=>x.id!==id);saveHist(h);sP('pHist',document.querySelectorAll('.nbtn')[2]);bH();ts('Удалён')}
+function eAllJSON(){
+  const h=getHist();if(!h.length){ts('Нет расчётов');return}
+  const b=new Blob([JSON.stringify(h,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);
+  a.download='расчёты_'+new Date().toLocaleDateString('ru-RU').replace(/\./g,'-')+'.json';
+  a.click();URL.revokeObjectURL(a.href);ts('JSON выгружен');
+}
 
 // Init
 bUI();bCL();load();rec();
