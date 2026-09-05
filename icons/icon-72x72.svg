@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72">
+  <defs>
+    <style>
+      .bg { fill: #0d0f13; }
+      .bolt { fill: #f5b400; }
+      .accent { fill: #f5b400; opacity: 0.6; }
+      .accent-copper { fill: #c87e00; opacity: 0.4; }
+    </style>
+  </defs>
+  <rect class="bg" width="72" height="72" rx="14" ry="14"/>
+  <path class="bolt" d="M36,10 L26,38 L36,38 L28,60 L44,32 L36,32 Z"/>
+  <circle class="accent" cx="20" cy="58" r="4"/>
+  <circle class="accent" cx="52" cy="58" r="4"/>
+  <circle class="accent-copper" cx="36" cy="58" r="3"/>
+</svg>

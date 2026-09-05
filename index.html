@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0d0f13">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Электрокалькулятор">
+<meta name="description" content="Калькулятор электромонтажных работ">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192x192.svg">
+<link rel="icon" type="image/svg+xml" href="icons/icon-192x192.svg">
+<title>Электрокалькулятор</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0f13;--panel:#161920;--panel2:#1b1f27;
+  --bdr:rgba(255,255,255,.09);--bdr2:rgba(255,255,255,.05);
+  --am:#f5b400;--amb:#ffcf40;--cop:#c17a4a;
+  --txt:#eef1f5;--mut:#8b93a1;--dng:#e2574c;
+  --safe-b:env(safe-area-inset-bottom);
+}
+html,body{margin:0;padding:0;overflow-x:hidden;-webkit-text-size-adjust:100%}
+body{
+  background:radial-gradient(ellipse at top left,rgba(245,180,0,.06),transparent 45%),
+  radial-gradient(ellipse at bottom right,rgba(193,122,74,.07),transparent 50%),var(--bg);
+  color:var(--txt);font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  padding:16px 16px calc(72px + var(--safe-b));
+  min-height:100vh;min-height:100dvh;
+  -webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;
+}
+.app{max-width:600px;margin:0 auto}
+
+/* splash */
+.splash{
+  position:fixed;inset:0;z-index:9999;
+  background:var(--bg);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  transition:opacity .4s;
+}
+.splash.hide{opacity:0;pointer-events:none}
+.splash svg{width:80px;height:80px;margin-bottom:16px}
+.splash p{color:var(--mut);font-size:14px;font-weight:600}
+
+/* offline banner */
+.offline-banner{
+  display:none;position:fixed;top:0;left:0;right:0;z-index:80;
+  background:var(--dng);color:#fff;text-align:center;
+  padding:8px;font-size:13px;font-weight:600;
+}
+.offline-banner.show{display:block}
+
+/* install banner */
+.install-banner{
+  display:none;position:fixed;bottom:calc(68px + var(--safe-b));left:12px;right:12px;
+  background:linear-gradient(135deg,var(--panel),var(--panel2));
+  border:1px solid var(--am);border-radius:14px;padding:16px;z-index:100;
+  box-shadow:0 8px 30px rgba(245,180,0,.2);
+}
+.install-banner.show{display:block}
+.install-banner p{font-size:14px;margin-bottom:12px}
+.install-banner .row{display:flex;gap:8px}
+.install-banner button{
+  flex:1;padding:12px;border:none;border-radius:8px;
+  font-size:14px;font-weight:700;cursor:pointer;
+}
+.inst{background:var(--am);color:#0d0f13}
+.inst2{background:var(--panel2);color:var(--mut);border:1px solid var(--bdr)!important}
+
+/* bottom nav */
+.bnav{
+  position:fixed;bottom:0;left:0;right:0;
+  background:var(--panel);border-top:1px solid var(--bdr);
+  display:flex;padding:6px 0 calc(6px + var(--safe-b));z-index:90;
+}
+.nbtn{
+  flex:1;background:none;border:none;color:var(--mut);
+  font-size:10px;font-weight:600;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:8px 0;cursor:pointer;transition:color .2s;
+}
+.nbtn.a{color:var(--am)}
+.nbtn svg{width:22px;height:22px}
+
+/* header */
+header{margin-bottom:16px}
+.eye{
+  font-size:11px;letter-spacing:.12em;color:var(--cop);text-transform:uppercase;
+  margin:0 0 6px;display:flex;align-items:center;gap:6px;font-weight:600;
+}
+.eye::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--am);box-shadow:0 0 6px 1px var(--am)}
+h1{font-weight:800;font-size:clamp(22px,5vw,28px);line-height:1.2;margin:0 0 6px}
+.sub{color:var(--mut);font-size:13px;line-height:1.4;margin:0}
+
+/* wire */
+.wire{width:100%;height:10px;margin:14px 0;opacity:.5}
+
+/* panel */
+.pnl{background:var(--panel);border:1px solid var(--bdr);border-radius:12px;padding:14px;margin-bottom:12px}
+
+/* toggle */
+.tg-wrap{margin-bottom:14px}
+.tg{
+  display:grid;grid-template-columns:1fr 1fr;width:100%;
+  background:var(--panel);border:1px solid var(--bdr);border-radius:10px;padding:3px;position:relative;
+}
+.tg .th{
+  position:absolute;top:3px;left:3px;width:calc(50% - 3px);height:calc(100% - 6px);
+  background:linear-gradient(180deg,var(--amb),var(--am));border-radius:7px;
+  transition:transform .25s cubic-bezier(.65,0,.35,1);box-shadow:0 3px 10px rgba(245,180,0,.25);
+}
+.tg.on .th{transform:translateX(100%)}
+.mbtn{
+  position:relative;z-index:1;background:transparent;border:none;
+  padding:10px 8px;font-weight:700;font-size:14px;color:var(--mut);
+  cursor:pointer;border-radius:7px;transition:color .2s;
+}
+.mbtn.a{color:#0d0f13}
+.tg-h{font-size:11px;color:var(--mut);margin-top:5px}
+
+/* fields */
+.f-label{display:block;font-size:12px;font-weight:600;color:var(--mut);margin:0 0 5px}
+.f{margin-bottom:12px}
+input[type="number"],input[type="text"],input[type="tel"]{
+  width:100%;background:var(--panel2);border:1px solid var(--bdr);border-radius:8px;
+  color:var(--txt);font-size:16px;padding:12px;transition:border-color .15s;
+}
+input:focus{outline:none;border-color:var(--am)}
+
+/* category */
+.cat{background:var(--panel);border:1px solid var(--bdr);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.cat-h{
+  background:var(--panel2);padding:13px 14px;cursor:pointer;
+  display:flex;align-items:center;justify-content:space-between;
+  user-select:none;transition:background .2s;border-bottom:1px solid var(--bdr2);
+}
+.cat-h:active{background:rgba(245,180,0,.08)}
+.cat-h h2{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px}
+.cat-h .arr{font-size:10px;transition:transform .3s;color:var(--am)}
+.cat-h.a .arr{transform:rotate(180deg)}
+.cat-b{padding:0;max-height:0;overflow:hidden;transition:max-height .3s ease,padding .2s ease}
+.cat-b.open{padding:12px 14px;max-height:5000px}
+
+/* item */
+.svc{
+  display:grid;grid-template-columns:1fr 58px 72px;gap:8px;align-items:center;
+  padding:10px 0;border-bottom:1px dashed var(--bdr2);
+}
+.svc:last-child{border-bottom:none}
+.svc-n{font-weight:500;font-size:13px}
+.svc-u{font-size:10px;color:var(--mut)}
+.svc-p{font-size:11px;color:var(--cop)}
+.svc-p.c{color:var(--amb)}
+.qi{
+  width:100%;padding:8px 4px;background:var(--panel2);
+  border:1px solid var(--bdr);border-radius:6px;
+  color:var(--txt);font-size:14px;text-align:center;transition:border-color .15s;
+}
+.qi:focus{outline:none;border-color:var(--am)}
+.svc-t{font-size:12px;text-align:right;color:var(--amb);white-space:nowrap}
+
+/* cat total */
+.ctot{
+  background:rgba(245,180,0,.06);padding:10px 14px;
+  display:flex;justify-content:space-between;align-items:center;
+  font-weight:700;border-top:1px solid var(--bdr);font-size:12px;
+}
+.ctot .a{color:var(--amb);font-size:13px}
+
+/* grand total */
+.gtot{
+  background:linear-gradient(165deg,var(--panel),var(--panel2));
+  border:1px solid var(--bdr);border-radius:12px;padding:16px;margin:14px 0;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.gtot h2{font-size:14px;font-weight:800}
+.gtot .a{font-size:clamp(20px,5vw,26px);font-weight:800;color:var(--amb);text-shadow:0 0 12px rgba(255,207,64,.3)}
+
+/* buttons */
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.acts .bf{grid-column:1/-1}
+.btn{
+  padding:14px;border:none;border-radius:10px;font-size:14px;font-weight:700;
+  cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.bp{background:linear-gradient(180deg,var(--amb),var(--am));color:#0d0f13}
+.bp:active{transform:scale(.97)}
+.bs{background:var(--panel2);border:1px solid var(--bdr);color:var(--txt)}
+.bs:active{border-color:var(--am)}
+.bd{background:rgba(226,87,76,.12);border:1px solid rgba(226,87,76,.3);color:var(--dng)}
+
+/* pages */
+.pg{display:none}.pg.a{display:block}
+
+/* search */
+.sw{margin-bottom:14px;position:relative}
+.sw input{
+  width:100%;background:var(--panel2);border:1px solid var(--bdr);
+  border-radius:10px;color:var(--txt);font-size:14px;padding:12px 12px 12px 38px;
+}
+.sw svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--mut)}
+
+/* cat list */
+.cl{list-style:none}
+.cl li{
+  padding:14px;border-bottom:1px solid var(--bdr2);cursor:pointer;
+  display:flex;align-items:center;gap:10px;font-size:14px;transition:background .2s;
+}
+.cl li:active{background:rgba(245,180,0,.06)}
+.cl li .ci{font-size:18px}
+.cl li .cc{margin-left:auto;font-size:11px;color:var(--mut);background:var(--panel2);padding:2px 8px;border-radius:10px}
+
+/* toast */
+.toast{
+  position:fixed;bottom:calc(76px + var(--safe-b));left:50%;transform:translateX(-50%);
+  background:var(--panel);border:1px solid var(--am);border-radius:10px;
+  padding:12px 20px;font-size:13px;color:var(--amb);z-index:200;
+  opacity:0;transition:opacity .3s;pointer-events:none;
+}
+.toast.s{opacity:1}
+
+@media print{
+  body{background:#fff;color:#000;padding:10px}
+  .cat,.pnl{background:#fff;border:1px solid #ddd}
+  .cat-h{background:#f5f5f5;color:#000}
+  .gtot{background:#f5f5f5;border:1px solid #ddd}
+  .gtot .a{color:#000;text-shadow:none}
+  .bnav,.install-banner,.acts,.tg-wrap,.sw,.offline-banner{display:none!important}
+  .cat-b{max-height:none!important;padding:12px!important}
+}
+</style>
+</head>
+<body>
+<div class="splash" id="splash">
+  <svg viewBox="0 0 192 192" fill="none"><rect width="192" height="192" rx="40" fill="#161920"/><path d="M100 30L80 100l30 0-25 65 35-75-30 0z" fill="#f5b400"/></svg>
+  <p>Загрузка...</p>
+</div>
+
+<div class="offline-banner" id="offlineBanner">Нет соединения — данные сохранены локально</div>
+
+<div class="app">
+  <div class="pg a" id="pCalc">
+    <header>
+      <p class="eye">Электромонтаж · расчёт</p>
+      <h1>Электрокалькулятор</h1>
+      <p class="sub">Рассчитайте стоимость электромонтажа</p>
+    </header>
+
+    <svg class="wire" viewBox="0 0 1000 10" preserveAspectRatio="none"><line x1="0" y1="5" x2="1000" y2="5" stroke="#c17a4a" stroke-width="1" stroke-dasharray="2 6"/><circle cx="20" cy="5" r="2.5" fill="#f5b400"/><circle cx="500" cy="5" r="2.5" fill="#c17a4a"/><circle cx="980" cy="5" r="2.5" fill="#f5b400"/></svg>
+
+    <div class="pnl">
+      <div class="f"><label class="f-label" for="cN">Контактное лицо</label><input type="text" id="cN" placeholder="Иванов Иван Иванович" autocomplete="name"></div>
+      <div class="f"><label class="f-label" for="cP">Телефон</label><input type="tel" id="cP" placeholder="+7 (999) 123-45-67" autocomplete="tel"></div>
+      <div class="f"><label class="f-label" for="cA">Адрес объекта</label><input type="text" id="cA" placeholder="г. Москва, ул. Примерная, д. 1" autocomplete="street-address"></div>
+    </div>
+
+    <div class="tg-wrap">
+      <div class="tg" id="tg" onclick="tgC()"><div class="th"></div><button class="mbtn a" id="mS" type="button">Стандарт</button><button class="mbtn" id="mB" type="button">Бетон ×2</button></div>
+      <div class="tg-h" id="tgH">Стандартные стены</div>
+    </div>
+
+    <div id="cats"></div>
+
+    <div class="gtot"><h2>ИТОГО</h2><div class="a" id="gT">0 ₽</div></div>
+
+    <div class="acts">
+      <button class="btn bd" onclick="rst()">Сбросить</button>
+      <button class="btn bs" onclick="expAll()">Развернуть</button>
+      <button class="btn bp bf" onclick="ePDF()">Скачать PDF</button>
+      <button class="btn bs bf" onclick="eXLS()">Скачать Excel</button>
+    </div>
+  </div>
+
+  <div class="pg" id="pCat">
+    <header><p class="eye">Навигация</p><h1>Разделы</h1></header>
+    <div class="sw">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" id="cS" placeholder="Найти раздел..." oninput="fCat()">
+    </div>
+    <ul class="cl" id="cL"></ul>
+  </div>
+</div>
+
+<div class="install-banner" id="iBan"><p>Установить приложение на экран?</p><div class="row"><button class="inst" onclick="instApp()">Установить</button><button class="inst2" onclick="disInst()">Позже</button></div></div>
+<div class="toast" id="toast"></div>
+
+<nav class="bnav">
+  <button class="nbtn a" onclick="sP('pCalc',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h8M8 14h4"/></svg>Калькулятор</button>
+  <button class="nbtn" onclick="sP('pCat',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Разделы</button>
+  <button class="nbtn" onclick="ePDF()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M12 18v-6M9 15l3 3 3-3"/></svg>PDF</button>
+</nav>
+
+<script>
+const S=[
+{c:"Подготовительные работы",i:"🔨",d:[
+{n:"Штробление стен под кабель (20×20 мм)",u:"пог. м",p:250,b:500},
+{n:"Сверление отверстия под подрозетник (d72 мм)",u:"шт",p:500,b:1000},
+{n:"Устройство ниши для щита скрытой установки, до 54 модулей",u:"шт",p:5000,b:10000},
+{n:"Устройство ниши для щита скрытой установки, до 72 модулей",u:"шт",p:8000,b:16000},
+{n:"Устройство ниши для щита скрытой установки, до 96 модулей",u:"шт",p:10000,b:20000},
+{n:"Устройство ниши для щита скрытой установки, до 112 модулей",u:"шт",p:15000,b:30000},
+{n:"Подготовка/бетонирование основания для ландшафтных светильников",u:"шт",p:1500,b:1500}]},
+{c:"Прокладка кабелей",i:"🔌",d:[
+{n:"Прокладка кабеля ВВГнг-LS 3×2,5 без гофры",u:"пог. м",p:150,b:150},
+{n:"Прокладка кабеля ВВГнг-LS 3×1,5 без гофры",u:"пог. м",p:150,b:150},
+{n:"Прокладка кабеля ВВГнг-LS 3×4 без гофры",u:"пог. м",p:200,b:200},
+{n:"Прокладка кабеля ВВГнг-LS 3×2,5 в гофре",u:"пог. м",p:200,b:200},
+{n:"Прокладка кабеля ВВГнг-LS 3×1,5 в гофре",u:"пог. м",p:200,b:200},
+{n:"Прокладка кабеля ВВГнг-LS 3×4 в гофре",u:"пог. м",p:250,b:250},
+{n:"Прокладка кабеля в кабель-канале до 4 мм",u:"пог. м",p:150,b:150},
+{n:"Прокладка кабеля в кабель-канале до 6 мм",u:"пог. м",p:200,b:200},
+{n:"Прокладка кабеля подземным способом в гофре/ПНД до 4 мм",u:"пог. м",p:800,b:800},
+{n:"Монтаж кабель-канала (ширина до 25 мм)",u:"пог. м",p:200,b:200}]},
+{c:"Установка розеток и выключателей",i:"💡",d:[
+{n:"Установка подрозетника",u:"шт",p:250,b:250},
+{n:"Установка внутренней розетки (механизм + рамка)",u:"шт",p:650,b:650},
+{n:"Установка накладной розетки одинарной",u:"шт",p:600,b:600},
+{n:"Установка накладной розетки двойной",u:"шт",p:700,b:700},
+{n:"Установка накладной розетки тройной",u:"шт",p:800,b:800},
+{n:"Установка выключателя (одноклавишный)",u:"шт",p:650,b:650},
+{n:"Установка выключателя (двухклавишный)",u:"шт",p:650,b:650},
+{n:"Монтаж и расключение распред. коробки",u:"шт",p:1000,b:1000}]},
+{c:"Электрощиты — установка",i:"📦",d:[
+{n:"Установка щита (до 24 модулей)",u:"шт",p:3000,b:3000},
+{n:"Установка щита (до 36 модулей)",u:"шт",p:5000,b:5000},
+{n:"Установка щита (до 54 модулей)",u:"шт",p:7000,b:7000},
+{n:"Установка щита (до 72 модулей)",u:"шт",p:9000,b:9000},
+{n:"Установка щита (до 96 модулей)",u:"шт",p:1000,b:1000}]},
+{c:"Электрощиты — сборка",i:"⚙️",d:[
+{n:"Установка модульного автомата (1P)",u:"шт",p:650,b:650},
+{n:"Установка Реле контроля напряжения",u:"шт",p:1150,b:1150},
+{n:"Установка УЗО или Дифавтомата (2P)",u:"шт",p:1150,b:1150},
+{n:"Сборка щита до 24 модулей",u:"шт",p:8000,b:8000},
+{n:"Сборка щита до 36 модулей",u:"шт",p:12000,b:12000},
+{n:"Сборка щита до 54 модулей",u:"шт",p:15000,b:15000},
+{n:"Сборка щита до 72 модулей",u:"шт",p:15000,b:15000},
+{n:"Сборка щита до 96 модулей",u:"шт",p:20000,b:20000},
+{n:"Сборка щита от 112 модулей",u:"шт",p:25000,b:25000}]},
+{c:"Подключение",i:"🔗",d:[
+{n:"Подключение вводного кабеля",u:"шт",p:5000,b:5000}]},
+{c:"Освещение",i:"🔦",d:[
+{n:"Монтаж профиля светодиодной ленты",u:"пог. м",p:500,b:500},
+{n:"Монтаж LED ленты в профиль",u:"пог. м",p:500,b:500},
+{n:"Установка точечного светильника",u:"шт",p:650,b:650},
+{n:"Установка люстры (на крюк)",u:"шт",p:2500,b:2500},
+{n:"Установка напольных/ландшафтных светильников",u:"шт",p:1500,b:1500},
+{n:"Установка прожекторного типа",u:"шт",p:1500,b:1500}]},
+{c:"Электрические отопительные системы",i:"🌡️",d:[
+{n:"Монтаж тёплого пола (кабель/маты)",u:"кв. м",p:800,b:800},
+{n:"Монтаж терморегулятора",u:"шт",p:1500,b:1500},
+{n:"Установка настенных радиаторов",u:"шт",p:2500,b:2500}]},
+{c:"Проектирование",i:"📐",d:[
+{n:"Проект электрофикации помещений",u:"кв. м",p:350,b:350},
+{n:"Проект электрофикации (умный дом)",u:"кв. м",p:550,b:550}]},
+{c:"Умный дом",i:"🏠",d:[
+{n:"Сборка системы управления отоплением SmartLife",u:"контур",p:500,b:500},
+{n:"Подключение умных реле SmartLife (освещение)",u:"шт",p:1500,b:1500},
+{n:"Подключение умных реле SmartLife (ворота)",u:"шт",p:2500,b:2500},
+{n:"Настройка Mesh Wi-Fi (до 3 устройств)",u:"сис",p:15000,b:15000},
+{n:"Настройка Mesh Wi-Fi (более 3 устройств)",u:"шт",p:20000,b:20000}]},
+{c:"Заземление",i:"⚒️",d:[
+{n:"Монтаж контура заземления",u:"компл",p:15000,b:15000}]},
+{c:"Безопасность и контроль доступа",i:"🛡️",d:[
+{n:"Установка видеодомофона",u:"шт",p:10000,b:10000},
+{n:"Установка электромеханического замка",u:"шт",p:5000,b:5000},
+{n:"Установка считывающего устройства",u:"шт",p:5000,b:5000},
+{n:"Установка камеры видеонаблюдения",u:"шт",p:3500,b:3500},
+{n:"Видеорегистратор (до 4 камер)",u:"шт",p:5000,b:5000},
+{n:"Видеорегистратор (до 8 камер)",u:"шт",p:7500,b:7500},
+{n:"Видеорегистратор (до 16 камер)",u:"шт",p:10000,b:10000},
+{n:"Система резервного питания",u:"шт",p:10000,b:10000},
+{n:"Прокладка кабеля видеонаблюдения",u:"пог. м",p:150,b:150}]}
+];
+
+let isC=false,dP=null;
+
+// SW
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+}
+
+// PWA install
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();dP=e;
+  if(!localStorage.getItem('id'))document.getElementById('iBan').classList.add('show');
+});
+function instApp(){if(!dP)return;dP.prompt();dP.userChoice.then(()=>{document.getElementById('iBan').classList.remove('show');dP=null})}
+function disInst(){document.getElementById('iBan').classList.remove('show');localStorage.setItem('id','1')}
+
+// Offline
+window.addEventListener('online',()=>document.getElementById('offlineBanner').classList.remove('show'));
+window.addEventListener('offline',()=>document.getElementById('offlineBanner').classList.add('show'));
+if(!navigator.onLine)document.getElementById('offlineBanner').classList.add('show');
+
+// Nav
+function sP(id,b){document.querySelectorAll('.pg').forEach(p=>p.classList.remove('a'));document.getElementById(id).classList.add('a');document.querySelectorAll('.nbtn').forEach(x=>x.classList.remove('a'));if(b)b.classList.add('a')}
+
+// Cat list
+function bCL(){const u=document.getElementById('cL');S.forEach((c,i)=>{const l=document.createElement('li');l.dataset.i=i;l.dataset.n=c.c.toLowerCase();l.innerHTML=`<span class="ci">${c.i}</span>${c.c}<span class="cc">${c.d.length}</span>`;l.onclick=()=>{sP('pCalc',document.querySelectorAll('.nbtn')[0]);setTimeout(()=>{const e=document.getElementById('b_'+i);if(e&&!e.classList.contains('open'))tC(i);e?.scrollIntoView({behavior:'smooth',block:'start'})},100)};u.appendChild(l)})}
+function fCat(){const q=document.getElementById('cS').value.toLowerCase();document.querySelectorAll('#cL li').forEach(l=>{l.style.display=l.dataset.n.includes(q)?'':'none'})}
+
+// Toggle
+function tgC(){isC=!isC;document.getElementById('tg').classList.toggle('on',isC);document.getElementById('mS').classList.toggle('a',!isC);document.getElementById('mB').classList.toggle('a',isC);document.getElementById('tgH').textContent=isC?'Бетон (коэф. ×2)':'Стандартные стены';rec()}
+
+// Build
+function bUI(){const c=document.getElementById('cats');S.forEach((cat,ci)=>{let h='';cat.d.forEach((it,ii)=>{h+=`<div class="svc"><div><div class="svc-n">${it.n}</div><div class="svc-u">${it.u}</div><div class="svc-p" id="p_${ci}_${ii}">${it.p} ₽/${it.u}</div></div><input type="number" class="qi" id="q_${ci}_${ii}" min="0" inputmode="numeric" oninput="rec()" placeholder="0"><div class="svc-t" id="t_${ci}_${ii}">0 ₽</div></div>`});c.innerHTML+=`<div class="cat"><div class="cat-h" onclick="tC(${ci})"><h2>${cat.i} ${cat.c}</h2><span class="arr" id="a_${ci}">▼</span></div><div class="cat-b" id="b_${ci}">${h}</div><div class="ctot"><span>Итого:</span><span class="a" id="ct_${ci}">0 ₽</span></div></div>`})}
+function tC(ci){document.getElementById('b_'+ci).classList.toggle('open');document.getElementById('a_'+ci).parentElement.classList.toggle('a')}
+function expAll(){S.forEach((_,ci)=>{const b=document.getElementById('b_'+ci);if(!b.classList.contains('open')){b.classList.add('open');document.getElementById('a_'+ci).parentElement.classList.add('a')}})}
+
+// Save/load state
+function save(){const d={c:isC,q:{},n:document.getElementById('cN').value,p:document.getElementById('cP').value,a:document.getElementById('cA').value};S.forEach((cat,ci)=>cat.d.forEach((_,ii)=>{const v=document.getElementById('q_'+ci+'_'+ii).value;if(v)d.q[ci+'_'+ii]=v}));try{localStorage.setItem('ecalc',JSON.stringify(d))}catch(e){}}
+function load(){try{const d=JSON.parse(localStorage.getItem('ecalc'));if(!d)return;if(d.c){isC=true;document.getElementById('tg').classList.add('on');document.getElementById('mS').classList.remove('a');document.getElementById('mB').classList.add('a');document.getElementById('tgH').textContent='Бетон (коэф. ×2)'}if(d.n)document.getElementById('cN').value=d.n;if(d.p)document.getElementById('cP').value=d.p;if(d.a)document.getElementById('cA').value=d.a;if(d.q)Object.entries(d.q).forEach(([k,v])=>{const el=document.getElementById('q_'+k);if(el)el.value=v})}catch(e){}}
+
+// Recalculate
+function rec(){let gt=0;S.forEach((cat,ci)=>{let ct=0;cat.d.forEach((it,ii)=>{const q=parseFloat(document.getElementById('q_'+ci+'_'+ii).value)||0;const p=document.getElementById('p_'+ci+'_'+ii);const cp=isC?it.b:it.p;p.textContent=cp+' ₽/'+it.u;p.classList.toggle('c',isC&&it.b!==it.p);const t=q*cp;ct+=t;document.getElementById('t_'+ci+'_'+ii).textContent=fm(t)});gt+=ct;document.getElementById('ct_'+ci).textContent=fm(ct)});document.getElementById('gT').textContent=fm(gt);save()}
+const fm=n=>Math.round(n).toLocaleString('ru-RU')+' ₽';
+
+function gFN(){const n=(document.getElementById('cN').value||'').trim();const p=(document.getElementById('cP').value||'').trim();let a=[];if(n)a.push(n.replace(/\s+/g,'_'));if(p)a.push(p.replace(/[^0-9+]/g,''));if(!a.length)a.push('расчет');return a.join('_')+'_'+new Date().toLocaleDateString('ru-RU').replace(/\./g,'-')}
+
+function rst(){if(!confirm('Сбросить?'))return;document.querySelectorAll('.qi').forEach(e=>e.value=0);if(isC)tgC();rec();ts('Сброшено')}
+function ts(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('s');setTimeout(()=>t.classList.remove('s'),2000)}
+
+function ePDF(){
+  if(typeof window.jspdf==='undefined'){ts('Загрузка PDF...');return}
+  const{jsPDF}=window.jspdf;const doc=new jsPDF('p','mm','a4');
+  const cn=document.getElementById('cN').value||'—',cp=document.getElementById('cP').value||'—',ca=document.getElementById('cA').value||'—';
+  doc.setFontSize(14);doc.setFont(undefined,'bold');doc.text('Электрокалькулятор',14,15);
+  doc.setFontSize(9);doc.setFont(undefined,'normal');
+  const d=new Date().toLocaleDateString('ru-RU');doc.text('Дата: '+d,14,22);
+  let y=28;doc.text('Лицо: '+cn,14,y);y+=5;doc.text('Тел: '+cp,14,y);y+=5;doc.text('Адрес: '+ca,14,y);y+=5;doc.text('Режим: '+(isC?'Бетон ×2':'Стандарт'),14,y);y+=7;
+  let rows=[],gt=0;
+  S.forEach((cat,ci)=>cat.d.forEach((it,ii)=>{const q=parseFloat(document.getElementById('q_'+ci+'_'+ii).value)||0;if(q>0){const pr=isC?it.b:it.p;const t=q*pr;gt+=t;rows.push([it.n,it.u,pr,q,t])}}));
+  if(!rows.length){doc.text('Нет позиций',14,y)}
+  else{doc.autoTable({startY:y,head:[['Наименование','Ед.','Цена','Кол-во','Сумма']],body:rows,styles:{fontSize:8},headStyles:{fillColor:[22,25,32]},columnStyles:{0:{cellWidth:75},2:{halign:'right'},3:{halign:'center'},4:{halign:'right'}}});doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('ИТОГО: '+gt.toLocaleString('ru-RU')+' ₽',14,doc.lastAutoTable.finalY+8)}
+  doc.save(gFN()+'.pdf');ts('PDF сохранён')}
+
+function eXLS(){
+  const s=';';let csv='\uFEFF';
+  const cn=document.getElementById('cN').value||'—',cp=document.getElementById('cP').value||'—',ca=document.getElementById('cA').value||'—';
+  const d=new Date().toLocaleDateString('ru-RU');
+  csv+='Дата'+s+d+'\nЛицо'+s+cn+'\nТел'+s+cp+'\nАдрес'+s+ca+'\nРежим'+s+(isC?'Бетон ×2':'Стандарт')+'\n\n';
+  csv+='Наименование'+s+'Ед.'+s+'Цена'+s+'Кол-во'+s+'Сумма\n';
+  let gt=0;
+  S.forEach((cat,ci)=>{let cr=[];cat.d.forEach((it,ii)=>{const q=parseFloat(document.getElementById('q_'+ci+'_'+ii).value)||0;if(q>0){const pr=isC?it.b:it.p;const t=q*pr;gt+=t;cr.push(it.n+s+it.u+s+pr+s+q+s+t)}});if(cr.length)csv+='\n'+cat.c+'\n'+cr.join('\n')+'\n'});
+  csv+='\n'+s+s+s+'ИТОГО:'+s+gt+'\n';
+  const b=new Blob([csv],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=gFN()+'.csv';a.click();URL.revokeObjectURL(a.href);ts('Excel сохранён')}
+
+// Init
+bUI();bCL();load();rec();
+// Input listeners for auto-save
+document.querySelectorAll('input').forEach(el=>el.addEventListener('input',()=>{save()}));
+// Hide splash
+window.addEventListener('load',()=>setTimeout(()=>document.getElementById('splash').classList.add('hide'),300));
+</script>
+</body>
+</html>
