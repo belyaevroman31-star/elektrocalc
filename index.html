@@ -478,7 +478,7 @@ function ePDF(){
   S.forEach((cat,ci)=>cat.d.forEach((it,ii)=>{const q=parseFloat(document.getElementById('q_'+ci+'_'+ii).value)||0;if(q>0){const pr=isC?it.b:it.p;const t=q*pr;gt+=t;rows.push([it.n,it.u,pr,q,t])}}));
   if(!rows.length){doc.text('Нет позиций',14,y)}
   else{doc.autoTable({startY:y,head:[['Наименование','Ед.','Цена','Кол-во','Сумма']],body:rows,styles:{fontSize:8},headStyles:{fillColor:[22,25,32]},columnStyles:{0:{cellWidth:75},2:{halign:'right'},3:{halign:'center'},4:{halign:'right'}}});doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('ИТОГО: '+gt.toLocaleString('ru-RU')+' ₽',14,doc.lastAutoTable.finalY+8)}
-  doc.save(gFN()+'.pdf');saveCalc();ts('PDF сохранён')}
+  doc.save(gFN()+'.pdf');saveCalc(editingId);editingId=null;ts('PDF сохранён')}
 
 function eXLS(){
   const s=';';let csv='\uFEFF';
@@ -489,23 +489,47 @@ function eXLS(){
   let gt=0;
   S.forEach((cat,ci)=>{let cr=[];cat.d.forEach((it,ii)=>{const q=parseFloat(document.getElementById('q_'+ci+'_'+ii).value)||0;if(q>0){const pr=isC?it.b:it.p;const t=q*pr;gt+=t;cr.push(it.n+s+it.u+s+pr+s+q+s+t)}});if(cr.length)csv+='\n'+cat.c+'\n'+cr.join('\n')+'\n'});
   csv+='\n'+s+s+s+'ИТОГО:'+s+gt+'\n';
-  const b=new Blob([csv],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=gFN()+'.csv';  a.click();URL.revokeObjectURL(a.href);saveCalc();ts('Excel сохранён')}
+  const b=new Blob([csv],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=gFN()+'.csv';  a.click();URL.revokeObjectURL(a.href);saveCalc(editingId);editingId=null;ts('Excel сохранён')}
 
 // History
 function getHist(){try{return JSON.parse(localStorage.getItem('ecalc_hist')||'[]')}catch(e){return[]}}
 function saveHist(h){try{localStorage.setItem('ecalc_hist',JSON.stringify(h))}catch(e){}}
-function saveCalc(){
+let editingId=null;
+function saveCalc(id){
   const cn=(document.getElementById('cN').value||'').trim();
   const cp=(document.getElementById('cP').value||'').trim();
   const ca=(document.getElementById('cA').value||'').trim();
-  const items=[];let gt=0;
+  const qMap={},items=[];let gt=0;
   S.forEach((cat,ci)=>cat.d.forEach((it,ii)=>{
     const q=parseFloat(document.getElementById('q_'+ci+'_'+ii).value)||0;
-    if(q>0){const pr=isC?it.b:it.p;const t=q*pr;gt+=t;items.push({cat:cat.c,name:it.n,unit:it.u,price:pr,qty:q,sum:t})}
+    if(q>0){qMap[ci+'_'+ii]=q;const pr=isC?it.b:it.p;const t=q*pr;gt+=t;items.push({cat:cat.c,name:it.n,unit:it.u,price:pr,qty:q,sum:t})}
   }));
   if(!items.length)return null;
-  const calc={id:Date.now(),date:new Date().toLocaleDateString('ru-RU'),time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),name:cn||'Без имени',phone:cp,address:ca,concrete:isC,items:items,total:gt};
-  const h=getHist();h.unshift(calc);saveHist(h);return calc;
+  const h=getHist();let calc;
+  if(id){
+    calc=h.find(x=>x.id===id);if(!calc)return null;
+    calc.date=new Date().toLocaleDateString('ru-RU');
+    calc.time=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+    calc.name=cn||'Без имени';calc.phone=cp;calc.address=ca;
+    calc.concrete=isC;calc.items=items;calc.qMap=qMap;calc.total=gt;
+  }else{
+    calc={id:Date.now(),date:new Date().toLocaleDateString('ru-RU'),time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),name:cn||'Без имени',phone:cp,address:ca,concrete:isC,items:items,qMap:qMap,total:gt};
+    h.unshift(calc);
+  }
+  saveHist(h);return calc;
+}
+function editCalc(id){
+  const h=getHist();const c=h.find(x=>x.id===id);if(!c)return;
+  document.querySelectorAll('.qi').forEach(e=>e.value=0);
+  if(!!c.concrete!==isC)tgC();
+  document.getElementById('cN').value=c.name==='Без имени'?'':c.name;
+  document.getElementById('cP').value=c.phone||'';
+  document.getElementById('cA').value=c.address||'';
+  if(c.qMap)Object.entries(c.qMap).forEach(([k,v])=>{const el=document.getElementById('q_'+k);if(el)el.value=v});
+  else c.items.forEach(it=>S.forEach((cat,ci)=>cat.d.forEach((it2,ii)=>{if(it2.n===it.name)document.getElementById('q_'+ci+'_'+ii).value=it.qty})));
+  rec();editingId=id;
+  sP('pCalc',document.querySelectorAll('.nbtn')[0]);
+  ts('Смета загружена для редактирования');
 }
 function bH(){
   const h=getHist();const el=document.getElementById('hList');
@@ -535,7 +559,8 @@ function vDetail(id){
     <div class="pnl hdetail">`;
   c.items.forEach(it=>{html+=`<div class="hrow"><span class="hn">${it.name}</span><span class="hq">${it.qty} × ${it.price}</span><span class="ht">${fm(it.sum)}</span></div>`});
   html+=`</div><div class="gtot"><h2>ИТОГО</h2><div class="a">${fm(c.total)}</div></div>
-    <button class="hdel" onclick="dCalc(${c.id})" style="margin-top:12px;width:100%">Удалить расчёт</button>`;
+    <button class="btn bp" onclick="editCalc(${c.id})" style="margin-top:12px;width:100%">Редактировать смету</button>
+    <button class="hdel" onclick="dCalc(${c.id})" style="margin-top:8px;width:100%">Удалить расчёт</button>`;
   document.getElementById('dContent').innerHTML=html;
   sP('pDetail',null);
 }
