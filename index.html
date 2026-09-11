@@ -491,18 +491,26 @@ function gFN(){const n=(document.getElementById('cN').value||'').trim();const p=
 function rst(){if(!confirm('Сбросить?'))return;document.querySelectorAll('.qi').forEach(e=>e.value=0);if(isC)tgC();rec();ts('Сброшено')}
 function ts(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('s');setTimeout(()=>t.classList.remove('s'),2000)}
 
-function ePDF(){
+async function ePDF(){
   if(typeof window.jspdf==='undefined'){ts('Загрузка PDF...');return}
   const{jsPDF}=window.jspdf;const doc=new jsPDF('p','mm','a4');
+  try{
+    const [rN,rB]=await Promise.all([
+      fetch('https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Me5Q.ttf'),
+      fetch('https://fonts.gstatic.com/s/roboto/v30/KFOlCnqEu92Fr1MmEU9fBBc4.ttf')
+    ]);
+    if(rN.ok){const b=await rN.arrayBuffer();let s='';const a=new Uint8Array(b);for(let i=0;i<a.length;i++)s+=String.fromCharCode(a[i]);doc.addFileToVFS('RobotoN.ttf',btoa(s));doc.addFont('RobotoN.ttf','Roboto','normal')}
+    if(rB.ok){const b=await rB.arrayBuffer();let s='';const a=new Uint8Array(b);for(let i=0;i<a.length;i++)s+=String.fromCharCode(a[i]);doc.addFileToVFS('RobotoB.ttf',btoa(s));doc.addFont('RobotoB.ttf','Roboto','bold')}
+  }catch(e){}
   const cn=document.getElementById('cN').value||'—',cp=document.getElementById('cP').value||'—',ca=document.getElementById('cA').value||'—';
-  doc.setFontSize(14);doc.setFont(undefined,'bold');doc.text('Электрокалькулятор',14,15);
-  doc.setFontSize(9);doc.setFont(undefined,'normal');
+  doc.setFontSize(14);doc.setFont('Roboto','bold');doc.text('Электрокалькулятор',14,15);
+  doc.setFontSize(9);doc.setFont('Roboto','normal');
   const d=new Date().toLocaleDateString('ru-RU');doc.text('Дата: '+d,14,22);
   let y=28;doc.text('Лицо: '+cn,14,y);y+=5;doc.text('Тел: '+cp,14,y);y+=5;doc.text('Адрес: '+ca,14,y);y+=5;doc.text('Режим: '+(isC?'Бетон ×2':'Стандарт'),14,y);y+=7;
   let rows=[],gt=0;
   S.forEach((cat,ci)=>cat.d.forEach((it,ii)=>{const q=parseFloat(document.getElementById('q_'+ci+'_'+ii).value)||0;if(q>0){const pr=isC?it.b:it.p;const t=q*pr;gt+=t;rows.push([it.n,it.u,pr,q,t])}}));
   if(!rows.length){doc.text('Нет позиций',14,y)}
-  else{doc.autoTable({startY:y,head:[['Наименование','Ед.','Цена','Кол-во','Сумма']],body:rows,styles:{fontSize:8},headStyles:{fillColor:[22,25,32]},columnStyles:{0:{cellWidth:75},2:{halign:'right'},3:{halign:'center'},4:{halign:'right'}}});doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('ИТОГО: '+gt.toLocaleString('ru-RU')+' ₽',14,doc.lastAutoTable.finalY+8)}
+  else{doc.autoTable({startY:y,head:[['Наименование','Ед.','Цена','Кол-во','Сумма']],body:rows,styles:{fontSize:8,font:'Roboto'},headStyles:{fillColor:[22,25,32],fontStyle:'bold'},columnStyles:{0:{cellWidth:75},2:{halign:'right'},3:{halign:'center'},4:{halign:'right'}}});doc.setFontSize(11);doc.setFont('Roboto','bold');doc.text('ИТОГО: '+gt.toLocaleString('ru-RU')+' ₽',14,doc.lastAutoTable.finalY+8)}
   doc.save(gFN()+'.pdf');saveCalc(editingId);editingId=null;ts('PDF сохранён')}
 
 function eXLS(){
