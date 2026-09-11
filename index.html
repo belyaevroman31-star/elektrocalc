@@ -227,6 +227,23 @@ input:focus{outline:none;border-color:var(--am)}
   font-weight:600;cursor:pointer;
 }
 
+/* edit picker modal */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;display:none;align-items:flex-end;justify-content:center}
+.modal.s{display:flex}
+.modal-box{
+  background:var(--panel);border:1px solid var(--bdr);border-radius:16px 16px 0 0;
+  max-width:600px;width:100%;max-height:72vh;overflow-y:auto;padding:16px;
+  padding-bottom:calc(16px + var(--safe-b));
+}
+.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.modal-head h3{font-size:16px;font-weight:800}
+.modal-x{background:none;border:none;color:var(--mut);font-size:20px;cursor:pointer;padding:4px}
+.edit-row{padding:12px;border-bottom:1px solid var(--bdr2);cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.edit-row:active{background:rgba(245,180,0,.06)}
+.edit-info{font-size:13px;font-weight:600}
+.edit-meta{font-size:11px;color:var(--mut);margin-top:2px}
+.edit-total{color:var(--amb);font-weight:700;font-size:14px;white-space:nowrap;margin-left:8px}
+
 /* search */
 .sw{margin-bottom:14px;position:relative}
 .sw input{
@@ -302,7 +319,8 @@ input:focus{outline:none;border-color:var(--am)}
       <button class="btn bd" onclick="rst()">Сбросить</button>
       <button class="btn bs" onclick="expAll()">Развернуть</button>
       <button class="btn bp bf" onclick="ePDF()">Скачать PDF</button>
-      <button class="btn bs bf" onclick="eXLS()">Скачать Excel</button>
+      <button class="btn bs bf" onclick="eXLS()">Скачать .xls</button>
+      <button class="btn bs bf" onclick="showEditPicker()">✎ Редактировать смету</button>
     </div>
   </div>
 
@@ -323,6 +341,13 @@ input:focus{outline:none;border-color:var(--am)}
   <div class="pg" id="pDetail">
     <header><p class="eye">Детали</p><h1 id="dTitle">Расчёт</h1></header>
     <div id="dContent"></div>
+  </div>
+</div>
+
+<div class="modal" id="editModal">
+  <div class="modal-box">
+    <div class="modal-head"><h3>Выберите смету</h3><button class="modal-x" onclick="hideEditPicker()">✕</button></div>
+    <div id="editList"></div>
   </div>
 </div>
 
@@ -481,15 +506,70 @@ function ePDF(){
   doc.save(gFN()+'.pdf');saveCalc(editingId);editingId=null;ts('PDF сохранён')}
 
 function eXLS(){
-  const s=';';let csv='\uFEFF';
   const cn=document.getElementById('cN').value||'—',cp=document.getElementById('cP').value||'—',ca=document.getElementById('cA').value||'—';
   const d=new Date().toLocaleDateString('ru-RU');
-  csv+='Дата'+s+d+'\nЛицо'+s+cn+'\nТел'+s+cp+'\nАдрес'+s+ca+'\nРежим'+s+(isC?'Бетон ×2':'Стандарт')+'\n\n';
-  csv+='Наименование'+s+'Ед.'+s+'Цена'+s+'Кол-во'+s+'Сумма\n';
-  let gt=0;
-  S.forEach((cat,ci)=>{let cr=[];cat.d.forEach((it,ii)=>{const q=parseFloat(document.getElementById('q_'+ci+'_'+ii).value)||0;if(q>0){const pr=isC?it.b:it.p;const t=q*pr;gt+=t;cr.push(it.n+s+it.u+s+pr+s+q+s+t)}});if(cr.length)csv+='\n'+cat.c+'\n'+cr.join('\n')+'\n'});
-  csv+='\n'+s+s+s+'ИТОГО:'+s+gt+'\n';
-  const b=new Blob([csv],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=gFN()+'.csv';  a.click();URL.revokeObjectURL(a.href);saveCalc(editingId);editingId=null;ts('Excel сохранён')}
+  let gt=0,rows=[];
+  S.forEach((cat,ci)=>cat.d.forEach((it,ii)=>{const q=parseFloat(document.getElementById('q_'+ci+'_'+ii).value)||0;if(q>0){const pr=isC?it.b:it.p;const t=q*pr;gt+=t;rows.push({cat:cat.c,name:it.n,unit:it.u,price:pr,qty:q,sum:t})}}));
+  if(!rows.length){ts('Нет позиций');return}
+  const xml=buildXls(cn,cp,ca,d,rows,gt);
+  const b=new Blob([xml],{type:'application/vnd.ms-excel'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=gFN()+'.xls';
+  a.click();URL.revokeObjectURL(a.href);saveCalc(editingId);editingId=null;ts('XLS сохранён')}
+
+function esX(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'')}
+function xlsCell(val,num,style){
+  const dt=num?'Number':'String';
+  const esc=num?String(val).replace(',','.'):esX(val);
+  return `<Cell${style?' ss:StyleID="'+style+'"':''}><Data ss:Type="${dt}">${esc}</Data></Cell>`;
+}
+function xlsRow(cells){return '<Row>'+cells.join('')+'</Row>'}
+function colW(arr){const ml=arr.reduce((m,s)=>Math.max(m,(''+s).length),0);return Math.min(Math.round(ml*1.35+2),70)}
+
+function buildXls(cn,cp,ca,d,rows,gt){
+  const c0=[],c1=[],c2=[],c3=[],c4=[];
+  rows.forEach(r=>{c0.push(r.name);c1.push(r.unit);c2.push(r.price);c3.push(r.qty);c4.push(r.sum)});
+  c0.push('Наименование');c1.push('Ед.');c2.push('Цена');c3.push('Кол-во');c4.push('Сумма');
+  c0.push('Электрокалькулятор','Лицо: '+cn,'Тел: '+cp,'Адрес: '+ca,'Режим: '+(isC?'Бетон ×2':'Стандарт'));
+  const W=[colW(c0),colW(c1),colW(c2),colW(c3),colW(c4)];
+  const cols=W.map(w=>`<Column ss:Width="${w}" ss:AutoFitWidth="0"/>`).join('');
+
+  let rowsXml='';
+  rowsXml+=xlsRow([xlsCell('Электрокалькулятор',0,'Title')]);
+  rowsXml+=xlsRow([xlsCell('Дата: '+d,0,'Info')]);
+  rowsXml+=xlsRow([xlsCell('Лицо: '+cn,0,'Info')]);
+  rowsXml+=xlsRow([xlsCell('Тел: '+cp,0,'Info')]);
+  rowsXml+=xlsRow([xlsCell('Адрес: '+ca,0,'Info')]);
+  rowsXml+=xlsRow([xlsCell('Режим: '+(isC?'Бетон ×2':'Стандарт'),0,'Info')]);
+  rowsXml+=xlsRow([xlsCell('',0,'Info')]);
+  rowsXml+=xlsRow([xlsCell('Наименование',0,'Hdr'),xlsCell('Ед.',0,'HdrC'),xlsCell('Цена, ₽',0,'HdrC'),xlsCell('Кол-во',0,'HdrC'),xlsCell('Сумма, ₽',0,'HdrC')]);
+  let cur=null;
+  rows.forEach(r=>{
+    if(r.cat!==cur){cur=r.cat;rowsXml+=xlsRow([xlsCell(cur,0,'Cat'),xlsCell('',0,'Cat'),xlsCell('',0,'Cat'),xlsCell('',0,'Cat'),xlsCell('',0,'Cat')])}
+    rowsXml+=xlsRow([xlsCell(r.name,0,'Item'),xlsCell(r.unit,0,'Num'),xlsCell(r.price,1,'Num'),xlsCell(r.qty,1,'Num'),xlsCell(r.sum,1,'Num')]);
+  });
+  rowsXml+=xlsRow([xlsCell('ИТОГО',0,'Tot'),xlsCell('',0,'Tot'),xlsCell('',0,'Tot'),xlsCell('',0,'Tot'),xlsCell(gt,1,'Tot')]);
+
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" xmlns:html="http://www.w3.org/TR/REC-html40">
+<Styles>
+<Style ss:ID="Def"><Alignment ss:Vertical="Center"/><Font ss:Size="10" ss:FontName="Arial"/></Style>
+<Style ss:ID="Title"><Font ss:Bold="1" ss:Size="14" ss:FontName="Arial"/><Alignment ss:Vertical="Center"/></Style>
+<Style ss:ID="Info"><Alignment ss:Vertical="Center"/><Font ss:Size="10" ss:FontName="Arial"/></Style>
+<Style ss:ID="Hdr"><Font ss:Bold="1" ss:Size="10" ss:FontName="Arial" ss:Color="#FFCF40"/><Interior ss:Color="#161920" ss:Pattern="Solid"/><Alignment ss:Horizontal="Left" ss:Vertical="Center"/><Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>
+<Style ss:ID="HdrC"><Font ss:Bold="1" ss:Size="10" ss:FontName="Arial" ss:Color="#FFCF40"/><Interior ss:Color="#161920" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>
+<Style ss:ID="Cat"><Font ss:Bold="1" ss:Size="10" ss:FontName="Arial"/><Alignment ss:Vertical="Center"/><Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>
+<Style ss:ID="Item"><Alignment ss:Vertical="Center" ss:WrapText="1"/><Font ss:Size="10" ss:FontName="Arial"/><Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>
+<Style ss:ID="Num"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><Font ss:Size="10" ss:FontName="Arial"/><Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>
+<Style ss:ID="Tot"><Font ss:Bold="1" ss:Size="11" ss:FontName="Arial"/><Alignment ss:Vertical="Center"/><Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="2"/><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>
+</Styles>
+<Worksheet ss:Name="Смета">
+<Table ss:DefaultColumnWidth="12">${cols}
+${rowsXml}
+</Table>
+</Worksheet>
+</Workbook>`;
+}
 
 // History
 function getHist(){try{return JSON.parse(localStorage.getItem('ecalc_hist')||'[]')}catch(e){return[]}}
@@ -529,8 +609,17 @@ function editCalc(id){
   else c.items.forEach(it=>S.forEach((cat,ci)=>cat.d.forEach((it2,ii)=>{if(it2.n===it.name)document.getElementById('q_'+ci+'_'+ii).value=it.qty})));
   rec();editingId=id;
   sP('pCalc',document.querySelectorAll('.nbtn')[0]);
+  expAll();window.scrollTo(0,0);
   ts('Смета загружена для редактирования');
 }
+function showEditPicker(){
+  const h=getHist();const el=document.getElementById('editList');
+  if(!h.length){el.innerHTML='<div class="hempty" style="padding:20px">Нет сохранённых смет.<br>Сначала скачайте PDF или XLS — смета сохранится.</div>'}
+  else el.innerHTML=h.map(c=>`<div class="edit-row" onclick="pickEdit(${c.id})"><div><div class="edit-info">${esX(c.name)}</div><div class="edit-meta">${c.date} ${c.time} · ${c.items.length} поз. · ${c.concrete?'Бетон':'Стандарт'}</div></div><div class="edit-total">${fm(c.total)}</div></div>`).join('');
+  document.getElementById('editModal').classList.add('s');
+}
+function hideEditPicker(){document.getElementById('editModal').classList.remove('s')}
+function pickEdit(id){hideEditPicker();editCalc(id)}
 function bH(){
   const h=getHist();const el=document.getElementById('hList');
   if(!h.length){el.innerHTML='<div class="hempty">Нет сохранённых расчётов.<br>Сделайте расчёт и скачайте PDF или Excel — он сохранится автоматически.</div>';return}
