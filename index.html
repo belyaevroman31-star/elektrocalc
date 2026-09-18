@@ -15,6 +15,7 @@
 <title>Электрокалькулятор</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -579,6 +580,111 @@ ${rowsXml}
 </Workbook>`;
 }
 
+// XLSX (true .xlsx, offline, OOXML+ZIP)
+function crc32(u){let c=~0;for(let i=0;i<u.length;i++){c^=u[i];for(let j=0;j<8;j++)c=(c>>>1)^(0xEDB88320&-(c&1))}return (~c)>>>0}
+function zipX(fs){ // fs=[{n(UTF-8 string),d(Uint8Array)}] -> Uint8Array (stored)
+  const te=new TextEncoder();
+  const cds=[];let off=0,data=[];
+  const u16=(a,v)=>{a.push(v&255,v>>8&255)};const u32=(a,v)=>{a.push(v&255,v>>8&255,v>>16&255,v>>>24&255)};
+  fs.forEach(f=>{
+    const nb=te.encode(f.n);
+    const h=[];
+    u32(h,0x04034b50);u16(h,20);u16(h,0x0800);u16(h,0);u16(h,0);u16(h,0);u32(h,crc32(f.d));u32(h,f.d.length);u32(h,f.d.length);u16(h,nb.length);u16(h,0);
+    h.push(...nb);
+    cds.push({nb,off});
+    data.push(h,f.d);
+    off+=h.length+f.d.length;
+  });
+  const cd=[];let cdStart=off;
+  fs.forEach(f=>{
+    const d=cds.find(c=>c.nb===f.n && c.off===f.off);
+    const nb=f.n?te.encode(f.n):[];
+    u32(cd,0x02014b50);u16(cd,20);u16(cd,20);u16(cd,0x0800);u16(cd,0);u16(cd,0);u16(cd,0);u32(cd,crc32(f.d));u32(cd,f.d.length);u32(cd,f.d.length);u16(cd,nb.length);u16(cd,0);u16(cd,0);u16(cd,0);u16(cd,0);u32(cd,0);u32(cd,off);
+    cd.push(...nb);
+  });
+  const eocd=[];const eocdPos=cdStart+cd.length;
+  u32(eocd,0x06054b50);u16(eocd,0);u16(eocd,0);u16(eocd,fs.length);u16(eocd,fs.length);u32(eocd,cd.length);u32(eocd,cdStart);u16(eocd,0);
+  const all=[...data,...cd,...eocd];
+  const out=new Uint8Array(all.length);all.forEach((b,i)=>out[i]=b);
+  return out;
+}
+const XE=(s)=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function eXLSX(){
+  const cn=document.getElementById('cN')?.value||'—',cp=document.getElementById('cP')?.value||'—',ca=document.getElementById('cA')?.value||'—';
+  const d=new Date().toLocaleDateString('ru-RU');
+  let gt=0,rows=[];
+  S.forEach((cat,ci)=>cat.d.forEach((it,ii)=>{const q=parseFloat(document.getElementById('q_'+ci+'_'+ii).value)||0;if(q>0){const pr=isC?it.b:it.p;const t=q*pr;gt+=t;rows.push({cat:cat.c,name:it.n,unit:it.u,price:pr,qty:q,sum:t})}}));
+  if(!rows.length){ts('Нет позиций');return}
+  // collect column content for width fitting
+  const c0=[''],c1=[''],c2=[''],c3=[''],c4=[''];
+  const push=(a,s)=>{if(s)a.push(''+s)};
+  rows.forEach(r=>{push(c0,r.name);push(c1,r.unit);push(c2,r.price);push(c3,r.qty);push(c4,r.sum)});
+  push(c0,'Наименование');push(c1,'Ед.');push(c2,'Цена');push(c3,'Кол-во');push(c4,'Сумма');
+  push(c1,'₽');push(c4,'₽');
+  const WID=[c0,c1,c2,c3,c4].map(a=>{const m=Math.max(...a.map(s=>s.length));return Math.max(8,Math.min(70,Math.round(m*1.35+3.5)))});
+  const cols=WID.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1" bestFit="1"/>`).join('');
+
+  let sr=0;const rowsXml=[];
+  const A=(cells,st)=>rowsXml.push(`<row r="${sr+1}">${cells.map((c,i)=>`<c r="${'ABCDE'[i]}${sr+1}"${c===''?'':' t="inlineStr"'} s="${st}"><is><t xml:space="preserve">${XE(c)}</t></is></c>`).join('')}</row>`);
+  A(['Электрокалькулятор','','','',''],1);sr++;
+  A(['Дата: '+d,'','','',''],2);sr++;
+  A(['Лицо: '+cn,'','','',''],2);sr++;
+  A(['Тел: '+cp,'','','',''],2);sr++;
+  A(['Адрес: '+ca,'','','',''],2);sr++;
+  A(['Режим: '+(isC?'Бетон ×2':'Стандарт'),'','','',''],2);sr++;
+  A(['','','','',''],0);sr++;
+  A(['Наименование','Ед.','Цена, ₽','Кол-во','Сумма, ₽'],3);sr++;
+  let cur=null;
+  rows.forEach(r=>{
+    if(r.cat!==cur){cur=r.cat;A([r.cat,'','','',''],4);sr++}
+    A([r.name,r.unit,String(r.price),String(r.qty),String(r.sum)],5);sr++;
+  });
+  A(['ИТОГО','','','',String(gt)],6);sr++;
+  const sheet=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${cols}</cols><sheetData>${rowsXml.join('')}</sheetData></worksheet>`;
+
+  const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="3"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="14"/><color rgb="FFFFC000"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts>
+<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF161920"/><bgColor indexed="64"/></patternFill></fill></fills>
+<borders count="2"><border/><border><left style="thin"/><right style="thin"/><top style="thin"/><bottom style="thin"/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="7">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="2" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="left" vertical="center"/></xf>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"><alignment horizontal="right" vertical="center"/></xf>
+</cellXfs>
+</styleSheet>`;
+
+  const CT=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
+  const RT=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+  const WB=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Смета" sheetId="1" r:id="rId1"/></sheets></workbook>`;
+  const WBREL=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+
+  const te=new TextEncoder();
+  const files=[
+    ['[Content_Types].xml',te.encode(CT)],
+    ['_rels/.rels',te.encode(RT)],
+    ['xl/workbook.xml',te.encode(WB)],
+    ['xl/_rels/workbook.xml.rels',te.encode(WBREL)],
+    ['xl/worksheets/sheet1.xml',te.encode(sheet)],
+    ['xl/styles.xml',te.encode(styles)]
+  ].map(([n,d])=>({n,d}));
+  const zip=zipX(files);
+  const blob=new Blob([zip],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=gFN()+'.xlsx';
+  a.click();URL.revokeObjectURL(a.href);
+  saveCalc(editingId);editingId=null;ts('XLSX сохранён');
+}
 // History
 function getHist(){try{return JSON.parse(localStorage.getItem('ecalc_hist')||'[]')}catch(e){return[]}}
 function saveHist(h){try{localStorage.setItem('ecalc_hist',JSON.stringify(h))}catch(e){}}
