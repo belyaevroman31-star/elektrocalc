@@ -532,7 +532,7 @@ function xlsCell(val,num,style){
   return `<Cell${style?' ss:StyleID="'+style+'"':''}><Data ss:Type="${dt}">${esc}</Data></Cell>`;
 }
 function xlsRow(cells){return '<Row>'+cells.join('')+'</Row>'}
-function colW(arr){const ml=arr.reduce((m,s)=>Math.max(m,(''+s).length),0);return Math.min(Math.round(ml*1.35+2),70)}
+function colW(arr){const W=(s)=>{let w=0;(''+s).split('').forEach(ch=>{w+=/^[\u0400-\u04FF ]$/.test(ch)?1.8:1.1});return w};const w=arr.reduce((m,s)=>Math.max(m,W(s)),0);return Math.min(Math.round(w+3),70)}
 
 function buildXls(cn,cp,ca,d,rows,gt){
   const c0=[],c1=[],c2=[],c3=[],c4=[];
